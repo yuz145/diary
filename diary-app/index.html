@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Diary</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --color-bg: #171614;
+      --color-surface: #1c1b19;
+      --color-text: #cdccca;
+      --color-primary: #4f98a3;
+      --font-body: 'Inter', sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-body);
+      background: var(--color-bg);
+      color: var(--color-text);
+    }
+    #view-login {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    #login-form {
+      background: var(--color-surface);
+      padding: 2rem;
+      border-radius: 8px;
+      max-width: 360px;
+      width: 100%;
+    }
+    #login-form input, #editor-input {
+      width: 100%;
+      padding: 0.5rem;
+      margin: 0.5rem 0;
+      background: var(--color-bg);
+      border: 1px solid #333;
+      color: var(--color-text);
+      border-radius: 4px;
+    }
+    button {
+      background: var(--color-primary);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #view-main { display: flex; min-height: 100vh; }
+    #sidebar {
+      width: 280px;
+      background: var(--color-surface);
+      padding: 1rem;
+      overflow: auto;
+    }
+    #entry-list { list-style: none; padding: 0; }
+    #entry-list li {
+      padding: 0.35rem 0;
+      cursor: pointer;
+      border-bottom: 1px solid #2a2926;
+    }
+    #entry-list li:hover { color: var(--color-primary); }
+    #content { flex: 1; padding: 1rem; overflow: auto; }
+    #viewer { line-height: 1.6; }
+    #viewer img, #image-list img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.5rem 0; }
+    #editor-preview {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--color-surface);
+      border-radius: 4px;
+    }
+    #login-error { color: #e57373; }
+    .preview-banner {
+      background: #2a2520;
+      border: 1px solid #4f98a3;
+      color: var(--color-text);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    #content .empty-hint { opacity: 0.75; }
+    h1 { margin-top: 0; }
+    #boot-error {
+      background: #3d2929;
+      border: 1px solid #c62828;
+      color: #ffcdd2;
+      padding: 0.75rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    .btn-secondary {
+      margin-top: 0.75rem;
+      width: 100%;
+      background: #3d3a36;
+      color: var(--color-text);
+    }
+    .btn-secondary:hover { filter: brightness(1.08); }
+    .dev-hint { font-size: 0.8rem; opacity: 0.75; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+
+<div id="view-login">
+  <form id="login-form" action="#" method="get">
+    <h1>My Diary</h1>
+    <p id="boot-error" hidden></p>
+    <input type="password" id="password-input" placeholder="パスワード（開発は test）" autocomplete="current-password">
+    <button type="submit" id="login-submit">ログイン</button>
+    <p id="login-error" hidden>パスワードが違います</p>
+    <button type="button" id="dev-enter-btn" class="btn-secondary" hidden>API なしで画面を開く（開発）</button>
+    <p id="dev-hint" class="dev-hint" hidden>Worker 未設定のときは上のボタンでそのまま入れます。</p>
+  </form>
+</div>
+
+<div id="view-main" hidden>
+  <aside id="sidebar">
+    <p class="sidebar-title" style="margin:0 0 0.75rem;font-size:0.85rem;opacity:0.8">日記一覧</p>
+    <div id="calendar"><!-- カレンダーUI（未実装） --></div>
+    <ul id="entry-list"></ul>
+  </aside>
+  <main id="content">
+    <div id="preview-banner" class="preview-banner" hidden></div>
+    <div id="viewer"></div>
+    <div id="editor" hidden>
+      <textarea id="editor-input" placeholder="今日のこと..." rows="12"></textarea>
+      <div id="editor-preview"></div>
+      <input type="file" id="image-upload" accept="image/*" multiple>
+      <button type="button" id="save-btn">保存</button>
+    </div>
+    <div id="image-list"></div>
+  </main>
+</div>
+
+<script>
+(function () {
+  const DEFAULT_API = "https://diary-worker.YOUR_SUBDOMAIN.workers.dev";
+
+  function normalizeBase(url) {
+    return String(url || "").trim().replace(/\/+$/, "");
+  }
+
+  /** 優先度: URL の ?api= ＞ diary-config.json ＞ 上の定数 */
+  async function resolveApiBase() {
+    const q = new URLSearchParams(location.search).get("api");
+    if (q && q.trim()) return normalizeBase(q);
+
+    try {
+      const res = await fetch("diary-config.json", { cache: "no-store" });
+      if (!res.ok) return DEFAULT_API;
+      const cfg = await res.json();
+      if (cfg && typeof cfg.apiBaseUrl === "string" && cfg.apiBaseUrl.trim()) {
+        return normalizeBase(cfg.apiBaseUrl);
+      }
+    } catch (_) {
+      /* file:// や MIME 不一致でもフォールバック */
+    }
+    return DEFAULT_API;
+  }
+
+  async function boot() {
+    const API = await resolveApiBase();
+    const API_UNCONFIGURED = API.includes("YOUR_SUBDOMAIN");
+    const PREVIEW_LOCAL = new URLSearchParams(location.search).get("preview") === "1";
+    let TOKEN = null;
+
+    const bootErr = document.getElementById("boot-error");
+    if (API_UNCONFIGURED) {
+      bootErr.textContent =
+        "開発モード: `diary-config.json` の apiBaseUrl がまだプレースホルダーです。パスワード test で表示のみ入れます。";
+      bootErr.hidden = false;
+    }
+
+    function setPreviewBanner(text) {
+      const el = document.getElementById("preview-banner");
+      el.textContent = text || "";
+      el.hidden = !text;
+    }
+
+    function isPreviewToken() {
+      return TOKEN === "preview-local";
+    }
+
+    function authHeaders() {
+      return { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" };
+    }
+
+    async function showMain() {
+      const vLogin = document.getElementById("view-login");
+      const vMain = document.getElementById("view-main");
+      vLogin.hidden = true;
+      vMain.hidden = false;
+      vLogin.setAttribute("aria-hidden", "true");
+      vMain.setAttribute("aria-hidden", "false");
+      vLogin.style.display = "none";
+      vMain.style.display = "flex";
+      await loadEntryList();
+    }
+
+    async function loadEntryList() {
+      if (isPreviewToken()) {
+        document.getElementById("entry-list").innerHTML = "";
+        document.getElementById("viewer").innerHTML =
+          "<p class=\"empty-hint\">ここにエントリの Markdown が表示されます。API を接続すると左に一覧が出ます。</p>";
+        document.getElementById("image-list").innerHTML = "";
+        return;
+      }
+
+      const res = await fetch(`${API}/diary`, { headers: authHeaders() });
+      if (!res.ok) {
+        document.getElementById("entry-list").innerHTML =
+          "<li style=\"opacity:0.8\">一覧の取得に失敗しました（API URL・認証を確認）</li>";
+        return;
+      }
+      const { entries } = await res.json();
+      const ul = document.getElementById("entry-list");
+      ul.innerHTML = entries
+        .map(
+          (e) =>
+            `<li data-date="${e.date}" data-action="load">${e.date} ${e.source === "cron" ? "🤖" : "✏️"}</li>`
+        )
+        .join("");
+      ul.querySelectorAll("li[data-action='load']").forEach((li) => {
+        li.addEventListener("click", () => loadEntry(li.getAttribute("data-date")));
+      });
+    }
+
+    async function loadEntry(date) {
+      if (isPreviewToken()) return;
+      const res = await fetch(`${API}/diary/${encodeURIComponent(date)}`, { headers: authHeaders() });
+      const { entries, images } = await res.json();
+      const content = entries.map((e) => e.content).join("\n\n---\n\n");
+      const md = typeof marked !== "undefined" ? marked.parse : (t) => t;
+      document.getElementById("viewer").innerHTML = md(content || "_（本文なし）_");
+
+      const imgHtml = (images || [])
+        .map(
+          (img) =>
+            `<img src="${API}/images/${encodeURIComponent(img.r2_key)}" loading="lazy" alt="${img.filename || ""}">`
+        )
+        .join("");
+      document.getElementById("image-list").innerHTML = imgHtml;
+    }
+
+    async function enterOfflineTestMode(message) {
+      TOKEN = "preview-local";
+      setPreviewBanner(
+        message ||
+          "パスワード test ・表示のみ。本番 Worker の URL を `diary-config.json` か `?api=` に書いてください。"
+      );
+      await showMain();
+    }
+
+    async function handleLogin() {
+      document.getElementById("login-error").hidden = true;
+      const raw = document.getElementById("password-input").value;
+      const password = raw.trim();
+      const wantOffline =
+        password.toLowerCase() === "test" && API_UNCONFIGURED;
+
+      try {
+        if (wantOffline) {
+          await enterOfflineTestMode(
+            "API URL が未設定のため表示のみでログインしました。`diary-app/diary-config.json` の `apiBaseUrl` を本番に直すか `?api=` を付与してください。"
+          );
+          return;
+        }
+
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        const res = await fetch(`${API}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          setPreviewBanner("");
+          const { token } = await res.json();
+          TOKEN = token;
+          await showMain();
+          return;
+        }
+        document.getElementById("login-error").hidden = false;
+      } catch (err) {
+        console.error(err);
+        if (password.toLowerCase() === "test") {
+          await enterOfflineTestMode("API に接続できません。オフライン表示に切り替えました。");
+          return;
+        }
+        document.getElementById("login-error").hidden = false;
+      }
+    }
+
+    if (PREVIEW_LOCAL) {
+      TOKEN = "preview-local";
+      const vLogin = document.getElementById("view-login");
+      const vMain = document.getElementById("view-main");
+      vLogin.hidden = true;
+      vMain.hidden = false;
+      vLogin.style.display = "none";
+      vMain.style.display = "flex";
+      setPreviewBanner(
+        "プレビュー（?preview=1）。API は呼びません。`diary-config.json` で URL を指定できます。"
+      );
+      await showMain();
+    }
+
+    const devBtn = document.getElementById("dev-enter-btn");
+    const devHint = document.getElementById("dev-hint");
+    if (API_UNCONFIGURED) {
+      devBtn.hidden = false;
+      devHint.hidden = false;
+      devBtn.addEventListener("click", async () => {
+        try {
+          await enterOfflineTestMode(
+            "開発用: Worker に接続せず表示のみモードで入りました。"
+          );
+        } catch (err) {
+          console.error(err);
+          alert("画面の切り替えに失敗しました: " + (err && err.message ? err.message : String(err)));
+        }
+      });
+    }
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await handleLogin();
+      } catch (err) {
+        console.error(err);
+        alert("ログイン処理でエラー: " + (err && err.message ? err.message : String(err)));
+      }
+    });
+
+    document.getElementById("save-btn").addEventListener("click", async () => {
+      if (isPreviewToken()) {
+        alert("表示のみモードでは保存できません。`diary-config.json` を本番 URL にしてください。");
+        return;
+      }
+      const date = new Date().toISOString().split("T")[0];
+      const content = document.getElementById("editor-input").value;
+      await fetch(`${API}/diary`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ date, content, source: "manual" }),
+      });
+
+      const files = document.getElementById("image-upload").files;
+      for (const file of files) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("date", date);
+        await fetch(`${API}/diary/upload-image`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${TOKEN}` },
+          body: form,
+        });
+      }
+
+      await loadEntryList();
+      await loadEntry(date);
+      document.getElementById("editor-input").value = "";
+      document.getElementById("image-upload").value = "";
+    });
+
+    document.getElementById("editor-input").addEventListener("input", (e) => {
+      const md = typeof marked !== "undefined" ? marked.parse : (t) => t.replace(/\n/g, "<br>");
+      document.getElementById("editor-preview").innerHTML = md(e.target.value);
+    });
+  }
+
+  boot().catch((err) => {
+    console.error(err);
+    const el = document.getElementById("boot-error");
+    if (el) {
+      el.textContent = "起動エラー: ページを再読み込みするか、コンソールを確認してください。";
+      el.hidden = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>
