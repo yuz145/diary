@@ -19,7 +19,7 @@ database_id = "YOUR_D1_DATABASE_ID"
 # ダッシュボード「バインディング」でも追加可。binding 名はコード上 env.R2 のため "R2" に統一
 [[r2_buckets]]
 binding = "R2"
-bucket_name = "diary-images"
+bucket_name = "diary-media"
 
 # 本番はダッシュボードの Variables / Secrets で上書き（JWT_SECRET など）
 [vars]

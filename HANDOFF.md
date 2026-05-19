@@ -68,10 +68,10 @@ rclone config
 # → R2のアクセスキーを入力してリモート名「r2」を作成
 
 # 手動テスト
-rclone sync r2:diary-images /volume1/diary-backup --progress
+rclone sync r2:diary-media /volume1/diary-backup --progress
 
 # crontab に追加（毎週日曜3時）
-0 3 * * 0 /usr/bin/rclone sync r2:diary-images /volume1/diary-backup >> /home/youruser/diary/rclone.log 2>&1
+0 3 * * 0 /usr/bin/rclone sync r2:diary-media /volume1/diary-backup >> /home/youruser/diary/rclone.log 2>&1
 ```
 
 ---
@@ -92,7 +92,7 @@ rclone sync r2:diary-images /volume1/diary-backup --progress
 ```
 1. wrangler d1 create diary-db
 2. wrangler d1 execute diary-db --file=schema.sql
-3. wrangler r2 bucket create diary-images
+3. wrangler r2 bucket create diary-media
 4. wrangler deploy
 5. Cloudflare Pages にリポジトリルート（`index.html` がある階層）をデプロイ、または Worker の `npm run deploy` のみで同一 URL に統合
 6. Email Routing を設定
