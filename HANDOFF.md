@@ -76,7 +76,7 @@ rclone sync r2:diary-images /volume1/diary-backup --progress
 
 1. Cloudflare ダッシュボード → **Email** → **Email Routing**
 2. カスタムアドレス `diary@yourdomain.com` を追加
-3. アクション：**Send to a Worker** → `diary-worker` を選択
+3. アクション：**Send to a Worker** → `diary`（`wrangler.toml` の `name` と一致する Worker）を選択
 4. Worker側の `email()` ハンドラが自動でD1に保存
 
 ---

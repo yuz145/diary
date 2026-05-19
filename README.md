@@ -27,6 +27,27 @@ npm run dev
 - API 未デプロイでも画面枠だけ見たい場合：`http://127.0.0.1:5173?preview=1`
 - 別 URL の Worker を試す場合：`?api=https://あなたのworker.workers.dev`
 
+## Cloudflare のビルドが失敗するとき（Workers & Pages）
+
+ログに `Your config file is using the Worker name ... expected "diary"` と出る場合は、`wrangler.toml` の `name` をダッシュボードのプロジェクト名（例: **diary**）に揃えてください。本リポジトリでは `name = "diary"` です。
+
+**CI で `npx wrangler deploy` を使う場合（Worker を Git からデプロイ）**
+
+1. `database_id = "YOUR_D1_DATABASE_ID"` の**プレースホルダーのままではデプロイできません**。D1 を作成し UUID を `wrangler.toml` に書いてください。  
+2. 例: `wrangler d1 create diary-db` → `wrangler d1 list` で ID をコピー → `wrangler d1 execute diary-db --file=schema.sql`。  
+3. R2 バケット `diary-images` が無いと失敗することがあります。`wrangler r2 bucket create diary-images` で作成。
+
+**静的サイトだけ先に載せたい場合（`diary-app` の HTML のみ）**
+
+Workers のビルドは使わず、Pages の次の設定にします。
+
+| 項目 | 推奨値 |
+|------|--------|
+| ビルドコマンド | （空） |
+| ビルド出力ディレクトリ | `diary-app` |
+
+`npx wrangler deploy` は **API 用 Worker**向けです。D1 ID を入れていない状態でこのコマンドが走ると失敗します。
+
 ## クイックセットアップ
 
 `HANDOFF.md` の「8. セットアップ順序」に従ってください。デプロイ前に次を必ず置換してください。

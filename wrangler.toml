@@ -1,7 +1,10 @@
-name = "diary-worker"
+# Cloudflare のプロジェクト名（Workers & Pages の「diary」と一致させる）
+name = "diary"
 main = "src/worker.js"
 compatibility_date = "2024-01-01"
 
+# YOUR_D1_DATABASE_ID のままでは wrangler deploy / CI は失敗します。
+# 先行: wrangler d1 create diary-db → ダッシュボード or wrangler d1 list で ID を取得して置換。
 [[d1_databases]]
 binding = "DB"
 database_name = "diary-db"

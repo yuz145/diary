@@ -4,6 +4,11 @@
   "scripts": {
     "dev": "python3 -m http.server 5173 --bind 127.0.0.1 --directory diary-app",
     "dev:serve": "npx --yes serve diary-app -l 5173",
-    "pages:dev": "npx --yes wrangler pages dev diary-app"
+    "pages:dev": "npx wrangler pages dev diary-app",
+    "deploy": "wrangler deploy",
+    "cf:types": "wrangler types"
+  },
+  "devDependencies": {
+    "wrangler": "^4.50.0"
   }
 }
