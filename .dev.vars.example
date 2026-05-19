@@ -1,0 +1,9 @@
+# ローカル `wrangler dev` 用。コピーして .dev.vars にリネームして編集（.dev.vars は Git に含めない）
+# 本番の値は wrangler secret put またはダッシュボード Secrets で設定する。
+
+JWT_SECRET=ローカル用に32文字以上のランダム文字列に置換
+# 平文パスワードの SHA-256 16進64文字（例: echo -n 'あなたのパスワード' | shasum -a 256）
+ADMIN_PASSWORD_HASH=
+
+# 任意: POST /diary/inbound-email を使うときだけ
+# EMAIL_SECRET=

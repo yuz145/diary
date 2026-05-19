@@ -216,20 +216,27 @@
       return location.origin;
     }
 
+    /* Cloudflare Pages (*.pages.dev) は Worker と別 URL。未設定時にプレースホルダー URL へ落とさない */
+    if (!isLocalDevHost() && /\.pages\.dev$/i.test(location.hostname)) {
+      return "";
+    }
+
     return DEFAULT_API;
   }
 
   async function boot() {
     const API = await resolveApiBase();
-    const API_UNCONFIGURED = API.includes("YOUR_SUBDOMAIN");
+    const API_UNCONFIGURED = !API || API.includes("YOUR_SUBDOMAIN");
+    const isPagesHost = /\.pages\.dev$/i.test(location.hostname);
     const PREVIEW_LOCAL = new URLSearchParams(location.search).get("preview") === "1";
     let TOKEN = null;
     let selectedDate = null;
 
     const bootErr = document.getElementById("boot-error");
     if (API_UNCONFIGURED) {
-      bootErr.textContent =
-        "開発モード: `diary-config.json` の apiBaseUrl がまだプレースホルダーです。パスワード test で表示のみ入れます。";
+      bootErr.textContent = isPagesHost
+        ? "このサイトは Pages（*.pages.dev）です。API は別の Worker URL です。リポジトリの `diary-config.json` で \"apiBaseUrl\" に `https://（あなたのWorker）.workers.dev` を書き、保存して再デプロイしてください。"
+        : "開発モード: `diary-config.json` の apiBaseUrl がまだプレースホルダーです。パスワード test で表示のみ入れます。";
       bootErr.hidden = false;
     }
 
@@ -367,6 +374,13 @@
       const wantOffline =
         password.toLowerCase() === "test" && API_UNCONFIGURED;
 
+      if (!API && !wantOffline) {
+        document.getElementById("login-error").textContent =
+          "先に `diary-config.json` の apiBaseUrl に Worker の https://....workers.dev を設定してください。";
+        document.getElementById("login-error").hidden = false;
+        return;
+      }
+
       try {
         if (wantOffline) {
           await enterOfflineTestMode(
@@ -452,7 +466,9 @@
 
     document.getElementById("save-btn").addEventListener("click", async () => {
       if (isPreviewToken()) {
-        alert("表示のみモードでは保存できません。`diary-config.json` を本番 URL にしてください。");
+        alert(
+          "表示のみモードです。Cloudflare Pages 利用時は `diary-config.json` の apiBaseUrl に Worker のフル URL（https://....workers.dev）を書き、push して再デプロイ後、本番パスワードでログインしてください。"
+        );
         return;
       }
       const date = selectedDate || new Date().toISOString().split("T")[0];

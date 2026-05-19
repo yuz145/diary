@@ -21,8 +21,6 @@ database_id = "YOUR_D1_DATABASE_ID"
 binding = "R2"
 bucket_name = "diary-media"
 
-# 本番はダッシュボードの Variables / Secrets で上書き（JWT_SECRET など）
-[vars]
-JWT_SECRET = "YOUR_JWT_SECRET_HERE"
-# 開発用: 平文パスワード "test" の SHA-256（16進64文字）
-ADMIN_PASSWORD_HASH = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+# 機密は wrangler secret put / ダッシュボード「シークレット」のみ（Git に平文を置かない）
+# ローカル: `.dev.vars.example` → `.dev.vars` をコピーして記入 → `wrangler dev`
+# 手順: docs/PRODUCTION.md
