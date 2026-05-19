@@ -3,9 +3,10 @@ name = "diary"
 main = "src/worker.js"
 compatibility_date = "2024-01-01"
 
-# フロント（diary-app）を同じ Worker の URL で配信 → GET / で HTML が表示される
+# 静的はリポジトリ直下の index.html / diary-config.json を正とし、deploy 前に static/ へコピー（`npm run sync-static`）。
+# directory="." は node_modules 全体が収集されるため使わない。
 [assets]
-directory = "diary-app"
+directory = "static"
 binding = "ASSETS"
 
 # YOUR_D1_DATABASE_ID のままでは wrangler deploy / CI は失敗します。

@@ -2,10 +2,11 @@
   "name": "diary",
   "private": true,
   "scripts": {
-    "dev": "python3 -m http.server 5173 --bind 127.0.0.1 --directory diary-app",
-    "dev:serve": "npx --yes serve diary-app -l 5173",
-    "pages:dev": "npx wrangler pages dev diary-app",
-    "deploy": "wrangler deploy",
+    "dev": "python3 -m http.server 5173 --bind 127.0.0.1 --directory .",
+    "dev:serve": "npx --yes serve . -l 5173",
+    "sync-static": "mkdir -p static && cp index.html diary-config.json static/",
+    "pages:dev": "npx wrangler pages dev .",
+    "deploy": "npm run sync-static && wrangler deploy",
     "cf:types": "wrangler types"
   },
   "devDependencies": {

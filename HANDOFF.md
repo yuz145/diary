@@ -35,7 +35,13 @@
 
 ## 4. フロントエンド（Cloudflare Pages）
 
-`diary-app/index.html` を参照。`API` 定数を実際の Workers URL に置換すること。
+リポジトリ直下の `index.html` を参照。`diary-config.json` で API 向き先を調整（デプロイ済み Worker と同一オリジンなら `sameOrigin` / `*.workers.dev` 自動）。
+
+---
+
+## 4b. Worker 用静的アセット（`static/`）
+
+`wrangler.toml` の `[assets]` は `static/` を指します。ルートの `index.html` / `diary-config.json` を編集したら **`npm run sync-static`** を実行してから `wrangler deploy`（または **`npm run deploy`** 一括）。
 
 ---
 
@@ -88,7 +94,7 @@ rclone sync r2:diary-images /volume1/diary-backup --progress
 2. wrangler d1 execute diary-db --file=schema.sql
 3. wrangler r2 bucket create diary-images
 4. wrangler deploy
-5. Cloudflare Pages に diary-app/index.html をデプロイ
+5. Cloudflare Pages にリポジトリルート（`index.html` がある階層）をデプロイ、または Worker の `npm run deploy` のみで同一 URL に統合
 6. Email Routing を設定
 7. Ubuntu に diary-gen.py を配置 → cron登録
 8. rclone 設定 → cron登録
