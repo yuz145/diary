@@ -15,6 +15,7 @@ Cloudflare Workers + D1 + R2 と単一 HTML クライアントで構成する個
 | `static/` | Worker `[assets]` 用（`npm run sync-static`） |
 | `scripts/diary-gen.py` | Ubuntu cron 用 |
 | `docs/PRODUCTION.md` | 本番: D1 / R2 / `pass` / `JWT_SECRET` |
+| `docs/EMAIL_ROUTING.md` | **`diary-email` + メールルート + 確認手順（任意）** |
 
 ## Cloudflare ダッシュボードとコードの対応
 
@@ -62,16 +63,13 @@ npm run deploy
 3. ダッシュボード: **`pass`**、**`JWT_SECRET`**（Secret）、バインディング **`diaryD1`** / **`diaryR2`**
 4. Pages 利用時は **`diary-config.json` の `apiBaseUrl`**
 
-## メール経由で日記に入れたいとき
+## メール経由で日記に取り込む
 
-**Perplexity Tasks** が届いたメールをこのアプリの D1 に自動で載せたいだけなら **有料の Perplexity API は不要**です。
+**詳細チェックリストは `docs/EMAIL_ROUTING.md`。** 概要だけ:
 
-- **自分でコピペ**するだけなら、メール本文を Markdown 編集に貼って保存すればよいです。
-- **自動連携**にする場合の方向性だけ:
-  - 独自ドメインで **Cloudflare Email Routing** を使い、そのアドレスに Perplexity から届ける（または自分の転送）。受信側を **`diary` Worker に「Send Email to Workers」で届ける**と、`src/worker.js` の `email()` が動き、本文が `source: 'email'` のエントリとして入ります（HTML メールや件名だけのときは運用調整が要ることがあります）。
-  - あるいは **Gmail のフィルタで転送**し、転送先を上記のアドレスにする、という形です。
-
-細かいセットアップは **`HANDOFF.md`** のメール関連を参照してください。
+- **Pages のプロジェクト `diary` がメールの宛先一覧に出ない**ことがある。その場合 **`oyuzen.com` で Email Routing 用 Worker（例: `diary-email`）を作り、変数名 `diaryD1` で本番 D1 と同じ DB に書く**。サイト用 Git の環境変数は **増やさなくていい**。
+- **自分でコピペ**だけなら、メール本文を編集画面に貼って保存でもよい。
+- **Perplexity API（有料）は不要**。転送先を **`diary@（あなたのドメイン）`** に設定する。
 
 ## ライセンス
 

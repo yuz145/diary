@@ -4,6 +4,8 @@
 
 **バインディング名**はダッシュボードと一致させる: D1 → **`diaryD1`**、R2 → **`diaryR2`**（`wrangler.toml` と同じ）。
 
+**メール取り込み（`diary-email` とルート）**は **`docs/EMAIL_ROUTING.md`** を参照。
+
 ---
 
 ## CI が失敗する: D1 `database_id` 無効 [code: 10021]

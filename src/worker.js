@@ -169,16 +169,19 @@ export default {
     return respond({ error: "Not found" }, 404);
   },
 
+  // メインの受信は多くの場合、ゾーンの Email Routing が別スクリプト（例 diary-email）に届ける構成。
+  // 同一 Worker に直接届く経路にも対応するためハンドラは残している。
   async email(message, env) {
     const body = await new Response(message.raw).text();
     const date = new Date().toISOString().split("T")[0];
     const id = crypto.randomUUID();
     if (!env.diaryD1) return;
+    const subject = message.headers.get("subject") || "";
     await env.diaryD1
       .prepare(
         "INSERT INTO entries (id, date, title, content, source) VALUES (?, ?, ?, ?, ?)"
       )
-      .bind(id, date, message.headers.get("subject"), body, "email")
+      .bind(id, date, subject, body, "email")
       .run();
   },
 };
