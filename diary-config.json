@@ -1,4 +1,4 @@
 {
-  "apiBaseUrl": "",
+  "apiBaseUrl": "https://diary.yuz145.workers.dev",
   "sameOrigin": false
 }

@@ -1,0 +1,4 @@
+{
+  "apiBaseUrl": "https://YOUR_WORKER_NAME.YOUR_ACCOUNT_SUBDOMAIN.workers.dev",
+  "sameOrigin": false
+}

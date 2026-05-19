@@ -12,6 +12,7 @@ Cloudflare Workers + D1 + R2 と単一 HTML クライアントで構成する個
 | `src/worker.js` | REST API・`env.diaryD1` / `env.diaryR2` / `env.pass` |
 | `/index.html` | フロント（**ルート**。デプロイ前に `static/` へコピー） |
 | `/diary-config.json` | `apiBaseUrl`（**Pages のときは Worker の URL が必須**） |
+| `diary-config.pages.example.json` | **`apiBaseUrl` の書き方の例**（置換後に `diary-config.json` へ反映） |
 | `static/` | Worker `[assets]` 用（`npm run sync-static`） |
 | `scripts/diary-gen.py` | Ubuntu cron 用 |
 | `docs/PRODUCTION.md` | 本番: D1 / R2 / `pass` / `JWT_SECRET` |

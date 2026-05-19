@@ -117,7 +117,7 @@ npm run deploy
 
 | 現象 | 確認 |
 |------|------|
-| ログイン 401 | **`pass`**（Variable）がログイン入力と完全一致しているか |
+| Pages でログインできない（`apiBaseUrl` 表示） | **`diary-config.json`** の **`apiBaseUrl`** に、**API 用 Worker の `https://….workers.dev`** を書いて push。例は **`diary-config.pages.example.json`**。**`JWT_SECRET`** も Pages のシークレットに必須 |
 | JWT エラー | **`JWT_SECRET`** が Secret として設定されているか |
 | 画像 503 | バインディング **`diaryR2`**、バケット **`diary-media`** |
 | DB 503 / diaryD1 | バインディング名 **`diaryD1`**、D1 が同じアカウントに存在するか |
