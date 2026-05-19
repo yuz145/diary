@@ -1,5 +1,6 @@
-// JWT_SECRET, ADMIN_PASSWORD_HASH は wrangler.toml の [vars] または Secrets で設定
-// EMAIL_SECRET を Secrets に設定すると POST /diary/inbound-email が利用可能
+// JWT_SECRET, ADMIN_PASSWORD_HASH … wrangler / ダッシュボード Variables・Secrets
+// R2: [[r2_buckets]] binding "R2" → env.R2（ダッシュボードのバインディング名も R2 に合わせる）
+// 静的: [assets] → env.ASSETS（HTML / diary-config.json を同一 Worker で配信）
 
 export default {
   async fetch(request, env) {
@@ -23,7 +24,34 @@ export default {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
-    // POST /auth/login
+    // --- 画像（img タグは Authorization を送れないため JWT なしで公開 GET）
+    if (path.startsWith("/images/") && method === "GET") {
+      if (!env.R2) {
+        return new Response(JSON.stringify({ error: "R2 binding missing. Set R2 in wrangler or dashboard." }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const key = path.replace(/^\/images\//, "");
+      const obj = await env.R2.get(key);
+      if (!obj) return new Response("Not found", { status: 404, headers: corsHeaders });
+      return new Response(obj.body, {
+        headers: {
+          "Content-Type": obj.httpMetadata?.contentType || "image/jpeg",
+          "Cache-Control": "public, max-age=86400",
+          ...corsHeaders,
+        },
+      });
+    }
+
+    // --- 同一 Worker でフロントを出す（/ /index.html / diary-config.json 等）
+    if (env.ASSETS && method === "GET") {
+      const needsApi = path.startsWith("/diary") || path.startsWith("/auth") || path.startsWith("/images");
+      if (!needsApi) {
+        return env.ASSETS.fetch(request);
+      }
+    }
+
     if (path === "/auth/login" && method === "POST") {
       const { password } = await request.json();
       const valid = await verifyPassword(password, env.ADMIN_PASSWORD_HASH);
@@ -32,7 +60,6 @@ export default {
       return respond({ token });
     }
 
-    // POST /diary/inbound-email （HTTP経由、Email Routing Webhook等）
     if (path === "/diary/inbound-email" && method === "POST") {
       if (!env.EMAIL_SECRET) return respond({ error: "Not configured" }, 503);
       const secret = request.headers.get("X-Email-Secret");
@@ -95,6 +122,9 @@ export default {
     }
 
     if (path === "/diary/upload-image" && method === "POST") {
+      if (!env.R2) {
+        return respond({ error: "R2 not bound. Add R2 bucket binding \"R2\" in wrangler or dashboard." }, 503);
+      }
       const formData = await request.formData();
       const file = formData.get("file");
       const entryDate = formData.get("date") || new Date().toISOString().split("T")[0];
@@ -113,18 +143,6 @@ export default {
       ).bind(imageId, entryDate, r2Key, file.name).run();
 
       return respond({ ok: true, id: imageId, r2_key: r2Key });
-    }
-
-    if (path.startsWith("/images/") && method === "GET") {
-      const key = path.replace("/images/", "");
-      const obj = await env.R2.get(key);
-      if (!obj) return new Response("Not found", { status: 404 });
-      return new Response(obj.body, {
-        headers: {
-          "Content-Type": obj.httpMetadata?.contentType || "image/jpeg",
-          ...corsHeaders,
-        },
-      });
     }
 
     return respond({ error: "Not found" }, 404);

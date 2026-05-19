@@ -147,21 +147,38 @@
     return String(url || "").trim().replace(/\/+$/, "");
   }
 
-  /** 優先度: URL の ?api= ＞ diary-config.json ＞ 上の定数 */
+  function isLocalDevHost() {
+    const h = location.hostname;
+    return (
+      h === "localhost" ||
+      h === "[::1]" ||
+      /^127\.\d+\.\d+\.\d+$/.test(h) ||
+      location.protocol === "file:"
+    );
+  }
+
+  /** 優先度: ?api= ＞ diary-config の apiBaseUrl ＞ sameOrigin / *.workers.dev ＞ DEFAULT */
   async function resolveApiBase() {
     const q = new URLSearchParams(location.search).get("api");
     if (q && q.trim()) return normalizeBase(q);
 
     try {
       const res = await fetch("diary-config.json", { cache: "no-store" });
-      if (!res.ok) return DEFAULT_API;
-      const cfg = await res.json();
-      if (cfg && typeof cfg.apiBaseUrl === "string" && cfg.apiBaseUrl.trim()) {
-        return normalizeBase(cfg.apiBaseUrl);
+      if (res.ok) {
+        const cfg = await res.json();
+        if (cfg && typeof cfg.apiBaseUrl === "string" && cfg.apiBaseUrl.trim()) {
+          return normalizeBase(cfg.apiBaseUrl);
+        }
+        if (cfg && cfg.sameOrigin === true && !isLocalDevHost()) {
+          return location.origin;
+        }
       }
-    } catch (_) {
-      /* file:// や MIME 不一致でもフォールバック */
+    } catch (_) {}
+
+    if (!isLocalDevHost() && /\.workers\.dev$/i.test(location.hostname)) {
+      return location.origin;
     }
+
     return DEFAULT_API;
   }
 

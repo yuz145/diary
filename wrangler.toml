@@ -3,6 +3,11 @@ name = "diary"
 main = "src/worker.js"
 compatibility_date = "2024-01-01"
 
+# フロント（diary-app）を同じ Worker の URL で配信 → GET / で HTML が表示される
+[assets]
+directory = "diary-app"
+binding = "ASSETS"
+
 # YOUR_D1_DATABASE_ID のままでは wrangler deploy / CI は失敗します。
 # 先行: wrangler d1 create diary-db → ダッシュボード or wrangler d1 list で ID を取得して置換。
 [[d1_databases]]
@@ -10,11 +15,12 @@ binding = "DB"
 database_name = "diary-db"
 database_id = "YOUR_D1_DATABASE_ID"
 
+# ダッシュボード「バインディング」でも追加可。binding 名はコード上 env.R2 のため "R2" に統一
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "diary-images"
 
-# 本番はダッシュボードの Variables / Secrets で上書きすること（パスワード平文は置かない）
+# 本番はダッシュボードの Variables / Secrets で上書き（JWT_SECRET など）
 [vars]
 JWT_SECRET = "YOUR_JWT_SECRET_HERE"
 # 開発用: 平文パスワード "test" の SHA-256（16進64文字）
