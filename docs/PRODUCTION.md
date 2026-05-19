@@ -40,7 +40,6 @@
 | **R2 バケット** | `diary-media` | R2 で作成済み（`wrangler.toml` の `bucket_name` と一致） |
 | **JWT 署名用** | `JWT_SECRET` | **Secret** で設定。32 文字以上のランダム（`openssl rand -hex 32` など） |
 | **ログイン用パスワード** | **`pass`** | ダッシュボード **Variables**（プレーン）。Worker が入力と `===` 照合 |
-| **（任意）メール取込** | `EMAIL_SECRET` | inbound 用 Webhook だけ使う場合 |
 
 ### Cloudflare にログインするときの「トークン」
 
@@ -88,14 +87,14 @@ wrangler d1 execute diary --remote --file=schema.sql
 | Variable（プレーン） | **`pass`** | ログイン用パスワード（平文） |
 | Secret | **`JWT_SECRET`** | ランダム長文 |
 
-任意: **Secret** `EMAIL_SECRET`（`/diary/inbound-email` 用）
+任意: **Secret** `EMAIL_SECRET`（`/diary/inbound-email` 用のみ）
 
 ### CLI
 
 ```bash
 wrangler login
 wrangler secret put JWT_SECRET
-# 任意
+# `/diary/inbound-email` のみ（任意）
 wrangler secret put EMAIL_SECRET
 ```
 
@@ -121,4 +120,3 @@ npm run deploy
 | 画像 503 | バインディング **`diaryR2`**、バケット **`diary-media`** |
 | DB 503 / diaryD1 | バインディング名 **`diaryD1`**、D1 が同じアカウントに存在するか |
 | deploy code **10021** | `wrangler.toml` の **`database_id`** を実 UUID に |
-| D1 実行時エラー | UUID 正しいか、`schema.sql` を **`wrangler d1 execute (DB名) --remote`** で流したか |

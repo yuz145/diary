@@ -5,6 +5,3 @@
 pass=test
 
 JWT_SECRET=ローカル用に32文字以上のランダム文字列に置換
-
-# 任意: POST /diary/inbound-email を使うときだけ
-# EMAIL_SECRET=

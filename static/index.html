@@ -305,13 +305,21 @@
     }
 
     async function handleLogin() {
-      document.getElementById("login-error").hidden = true;
-      const password = document.getElementById("password-input").value;
+      const loginError = document.getElementById("login-error");
+      loginError.hidden = true;
+      loginError.textContent = "パスワードが違います"; // reset for next attempt
+      const password = document.getElementById("password-input").value.trim();
+
+      if (!password) {
+        loginError.textContent = "パスワードを入力してください。";
+        loginError.hidden = false;
+        return;
+      }
 
       if (!API) {
-        document.getElementById("login-error").textContent =
+        loginError.textContent =
           "先に `diary-config.json` の apiBaseUrl を設定するか、`?api=https://….workers.dev` で開いてください。";
-        document.getElementById("login-error").hidden = false;
+        loginError.hidden = false;
         return;
       }
 
@@ -331,12 +339,21 @@
           await showMain();
           return;
         }
-        document.getElementById("login-error").hidden = false;
+        let msg = "ログインできませんでした。";
+        try {
+          const j = await res.json();
+          if (j && typeof j.error === "string") msg = j.error;
+        } catch (_) {}
+        if (res.status === 401 && msg === "ログインできませんでした。") {
+          msg = "パスワードが Cloudflare の Variables「pass」と一致しません。";
+        }
+        loginError.textContent = msg;
+        loginError.hidden = false;
       } catch (err) {
         console.error(err);
-        document.getElementById("login-error").textContent =
-          "API に接続できません。URL とネットワークを確認してください。";
-        document.getElementById("login-error").hidden = false;
+        loginError.textContent =
+          "API に接続できません。`diary-config.json` の apiBaseUrl を Worker の URL と照合してください。";
+        loginError.hidden = false;
       }
     }
 

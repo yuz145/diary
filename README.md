@@ -45,7 +45,7 @@ Cloudflare Workers + D1 + R2 と単一 HTML クライアントで構成する個
 npm run dev
 ```
 
-`wrangler dev` が Worker を起動します（以前の Python 静的サーバーは廃止）。`.dev.vars.example` → `.dev.vars` に `pass` と `JWT_SECRET` を書いてください。
+`wrangler dev` が Worker を起動します。`.dev.vars.example` → `.dev.vars` に `pass` と `JWT_SECRET` を書いてください。
 
 ## デプロイ
 
@@ -61,6 +61,17 @@ npm run deploy
 2. `wrangler d1 execute （database_name） --remote --file=schema.sql`
 3. ダッシュボード: **`pass`**、**`JWT_SECRET`**（Secret）、バインディング **`diaryD1`** / **`diaryR2`**
 4. Pages 利用時は **`diary-config.json` の `apiBaseUrl`**
+
+## メール経由で日記に入れたいとき
+
+**Perplexity Tasks** が届いたメールをこのアプリの D1 に自動で載せたいだけなら **有料の Perplexity API は不要**です。
+
+- **自分でコピペ**するだけなら、メール本文を Markdown 編集に貼って保存すればよいです。
+- **自動連携**にする場合の方向性だけ:
+  - 独自ドメインで **Cloudflare Email Routing** を使い、そのアドレスに Perplexity から届ける（または自分の転送）。受信側を **`diary` Worker に「Send Email to Workers」で届ける**と、`src/worker.js` の `email()` が動き、本文が `source: 'email'` のエントリとして入ります（HTML メールや件名だけのときは運用調整が要ることがあります）。
+  - あるいは **Gmail のフィルタで転送**し、転送先を上記のアドレスにする、という形です。
+
+細かいセットアップは **`HANDOFF.md`** のメール関連を参照してください。
 
 ## ライセンス
 

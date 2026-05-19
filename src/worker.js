@@ -49,16 +49,32 @@ export default {
 
     // --- 同一 Worker でフロント（/ /index.html / diary-config.json 等）
     if (env.ASSETS && method === "GET") {
-      const needsApi = path.startsWith("/diary") || path.startsWith("/auth") || path.startsWith("/images");
+      const needsApi =
+        path.startsWith("/diary") || path.startsWith("/auth") || path.startsWith("/images");
       if (!needsApi) {
         return env.ASSETS.fetch(request);
       }
     }
 
     if (path === "/auth/login" && method === "POST") {
-      if (!env.JWT_SECRET) return respond({ error: "JWT_SECRET not configured" }, 503);
-      const { password } = await request.json();
-      if (!verifyLoginPassword(password, env)) return respond({ error: "Unauthorized" }, 401);
+      if (!env.JWT_SECRET) return respond({ error: "JWT_SECRET not configured (set Secret in dashboard or wrangler secret put)" }, 503);
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return respond({ error: "Invalid JSON body" }, 400);
+      }
+      const rawPassword = body && body.password !== undefined ? body.password : null;
+      if (rawPassword === null || typeof rawPassword !== "string") {
+        return respond({ error: 'Request must include JSON { "password": "…" }' }, 400);
+      }
+
+      const passUnset = typeof env.pass !== "string" || !String(env.pass).trim();
+      if (passUnset) return respond({ error: 'Worker variable "pass" is empty or unset (Workers → diary → Variables)' }, 503);
+
+      if (!verifyLoginPassword(rawPassword, env)) {
+        return respond({ error: "Wrong password (must match Variables「pass」exactly)" }, 401);
+      }
       const token = await generateJWT(env.JWT_SECRET);
       return respond({ token });
     }
@@ -94,6 +110,7 @@ export default {
 
     if (path.startsWith("/diary/") && method === "GET") {
       const date = path.split("/diary/")[1];
+      if (!date) return respond({ error: "Not found" }, 404);
       const { results } = await db.prepare(
         "SELECT * FROM entries WHERE date = ? ORDER BY created_at DESC"
       ).bind(date).all();
@@ -168,9 +185,8 @@ export default {
 
 function verifyLoginPassword(password, env) {
   const p = env.pass;
-  if (p == null) return false;
-  if (typeof p !== "string") return false;
-  return String(password) === p;
+  if (typeof p !== "string" || !p.trim()) return false;
+  return String(password).trim() === p.trim();
 }
 
 async function generateJWT(secret) {

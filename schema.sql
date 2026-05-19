@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS entries (
   date TEXT NOT NULL,          -- YYYY-MM-DD
   title TEXT,
   content TEXT NOT NULL,       -- Markdown
-  source TEXT DEFAULT 'manual', -- 'manual' | 'cron' | 'email' | 'perplexity'
+  source TEXT DEFAULT 'manual', -- 'manual' | 'cron' | 'email' （外部サービス経由でも文字列で区別してよい）
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
