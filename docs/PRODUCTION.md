@@ -1,6 +1,34 @@
-# 本番環境への移行（D1 / R2 / シークレット）
+# 本番環境への移行（D1 / R2 / 変数）
 
-リポジトリの `wrangler.toml` には **パスワードや JWT 用の平文を置いていません**。本番では **Cloudflare Secrets** と **ダッシュボードのバインディング**で揃えます。
+リポジトリの `wrangler.toml` には **JWT 平文を置いていません**。ログイン用の **`pass`** はダッシュボード **Variables** のプレーンテキストで設定します（コードは `env.pass` で照合）。
+
+**バインディング名**はダッシュボードと一致させる: D1 → **`diaryD1`**、R2 → **`diaryR2`**（`wrangler.toml` と同じ）。
+
+---
+
+## CI が失敗する: D1 `database_id` 無効 [code: 10021]
+
+**原因:** `wrangler.toml` の `database_id` が **`YOUR_D1_DATABASE_ID` のまま**（または無効な UUID）。
+
+**対処:**
+
+1. **D1 がまだ無い**場合は作成（名前は例として `diary`。`wrangler.toml` の `database_name` と揃える）:
+   ```bash
+   wrangler d1 create diary
+   ```
+2. **UUID を確認**:
+   ```bash
+   wrangler d1 list
+   ```
+   または ダッシュボード **ストレージとデータベース** → **D1** → 対象 DB → **データベース ID**（ハイフン付き 36 文字）をコピー。
+3. **`wrangler.toml`** の `database_id = "…"` をその UUID に差し替えてコミットする。
+4. **初回だけスキーマ**（`database_name` が `diary` の例）:
+   ```bash
+   wrangler d1 execute diary --remote --file=schema.sql
+   ```
+5. push してビルドを再実行。
+
+`database_id` は**秘密ではない**のでリポジトリに書いて問題ありません。
 
 ---
 
@@ -8,74 +36,70 @@
 
 | 種別 | 名前 | どこで手に入るか |
 |------|------|-------------------|
-| **D1 データベース UUID** | `database_id` | [ダッシュボード] ストレージ & データベース → D1 → `diary-db` の ID、または `wrangler d1 list` |
-| **R2 バケット** | `diary-media` | R2 でバケット作成済みであること（名前は `wrangler.toml` の `bucket_name` と一致） |
-| **JWT 署名用シークレット** | `JWT_SECRET` | **自分で生成**（32 文字以上のランダム。パスワード生成器や `openssl rand -hex 32` など） |
-| **ログイン用パスワードハッシュ** | `ADMIN_PASSWORD_HASH` | **自分のパスワード**を SHA-256（16進小文字64文字）にしたもの（下のコマンド参照） |
-| **（任意）メール取込用** | `EMAIL_SECRET` | **自分で生成**したランダム文字列（inbound 用 Webhook だけ使う場合） |
+| **D1 データベース UUID** | `database_id` | D1 の DB 詳細、または `wrangler d1 list` |
+| **R2 バケット** | `diary-media` | R2 で作成済み（`wrangler.toml` の `bucket_name` と一致） |
+| **JWT 署名用** | `JWT_SECRET` | **Secret** で設定。32 文字以上のランダム（`openssl rand -hex 32` など） |
+| **ログイン用パスワード** | **`pass`** | ダッシュボード **Variables**（プレーン）。Worker が入力と `===` 照合 |
+| **（任意）メール取込** | `EMAIL_SECRET` | inbound 用 Webhook だけ使う場合 |
 
 ### Cloudflare にログインするときの「トークン」
 
 | 用途 | 必要なもの |
 |------|------------|
-| **PC で `wrangler deploy` / `wrangler secret put`** | **`wrangler login`**（ブラウザ認証）で十分なことが多い。CI だけ長期トークンが必要。 |
-| **GitHub / CI からデプロイ** | [ダッシュボード] マイプロフィール → **API トークン** で作成。**権限の例**: `Account` → Cloudflare Workers Scripts 編集、`Account` → D1 編集、必要なら R2 管理。テンプレート「Edit Cloudflare Workers」をベースに調整。環境変数名は多くの場合 `CLOUDFLARE_API_TOKEN`。 |
-| **rclone で NAS バックアップ**（HANDOFF の rclone 用） | R2 の **S3 API** 用に、アカウント詳細で **R2 用の Access Key ID / Secret Access Key**（または API トークンに R2 読み取り）を発行。Worker とは別の認証です。 |
+| **PC で `wrangler deploy` / `wrangler secret put`** | **`wrangler login`** で十分なことが多い。CI だけ長期トークンが必要。 |
+| **GitHub / CI からデプロイ** | **API トークン**: Workers Scripts 編集、D1 編集、必要なら R2。環境変数名は多くの場合 `CLOUDFLARE_API_TOKEN`。 |
+| **rclone で NAS バックアップ**（HANDOFF の rclone 用） | R2 の **S3 API** 用キー。Worker のバインディングとは別です。 |
 
-※ **Worker が R2 に触るとき**に追加の S3 トークンは **不要**です。`wrangler.toml` の `[[r2_buckets]]` とダッシュボードの **バインディング名 `R2`** が合っていれば、Cloudflare 側で配線されます。
+※ Worker が R2 に触るとき、別途 S3 キーは **不要**です。**バインディング名 `diaryR2`** とバケット `diary-media` が合っていればよいです。
 
 ---
 
-## 手順 1: `wrangler.toml` の D1 ID
+## 手順 1: `wrangler.toml` の D1
 
-`database_id = "YOUR_D1_DATABASE_ID"` を、本番の D1 の **UUID** に書き換える。
+`database_id` を本番 D1 の **UUID** に書き換える。`database_name` は Cloudflare 上の D1 名（例: **`diary`**）と一致させる。
 
 ```bash
 wrangler d1 list
-# 無ければ: wrangler d1 create diary-db
-wrangler d1 execute diary-db --remote --file=schema.sql
+wrangler d1 execute diary --remote --file=schema.sql
 ```
 
 ---
 
-## 手順 2: R2 本番バケット
+## 手順 2: R2
 
-1. R2 でバケット **`diary-media`** を作成（済みなら不要）。
-2. **Workers & Pages** → 該当 Worker / プロジェクト → **設定** → **バインディング**:
-   - **変数名**: `R2`（コードは `env.R2` のみ）
+1. バケット **`diary-media`** を作成（済みなら不要）。
+2. **Workers & Pages** → **設定** → **バインディング**:
+   - **変数名**: **`diaryR2`**
    - **バケット**: `diary-media`
-3. `wrangler.toml` の `bucket_name = "diary-media"` と一致していることを確認。
+3. `wrangler.toml` の `binding = "diaryR2"` / `bucket_name` と一致していること。
 
 ---
 
-## 手順 3: シークレットの登録（本番）
+## 手順 3: 変数・シークレット（本番）
 
-ローカルでは `.dev.vars`（`.dev.vars.example` をコピー）を使う。**本番**では次のいずれか。
+ローカルは `.dev.vars`（`.dev.vars.example` をコピー）。
 
-### A. CLI（推奨）
+### ダッシュボード
+
+**Workers & Pages** → **diary** → **設定** → **変数とシークレット**:
+
+| 種類 | 名前 | 内容 |
+|------|------|------|
+| Variable（プレーン） | **`pass`** | ログイン用パスワード（平文） |
+| Secret | **`JWT_SECRET`** | ランダム長文 |
+
+任意: **Secret** `EMAIL_SECRET`（`/diary/inbound-email` 用）
+
+### CLI
 
 ```bash
 wrangler login
-# 対話で貼り付け（入力は画面に表示されない）
 wrangler secret put JWT_SECRET
-wrangler secret put ADMIN_PASSWORD_HASH
 # 任意
 wrangler secret put EMAIL_SECRET
 ```
 
-`ADMIN_PASSWORD_HASH` の値の作り方（macOS / Linux）:
-
-```bash
-echo -n 'あなたの本番パスワード' | shasum -a 256
-# 出た64文字の16進をそのまま Secret の値にする（小文字のままでOK）
-```
-
-### B. ダッシュボード
-
-**Workers & Pages** → **diary** → **設定** → **変数とシークレット**:
-- **シークレット**として `JWT_SECRET` / `ADMIN_PASSWORD_HASH` を追加（名前は上記と完全一致）。
-
-`[vars]` に同じ名前で平文を置かないこと（漏洩防止）。
+`pass` は **ダッシュボードの Variables** で設定するか、ローカルのみ `.dev.vars` に書く（Git に含めない）。
 
 ---
 
@@ -84,8 +108,6 @@ echo -n 'あなたの本番パスワード' | shasum -a 256
 ```bash
 npm run sync-static
 npm run deploy
-# または
-npx wrangler deploy
 ```
 
 ---
@@ -94,7 +116,9 @@ npx wrangler deploy
 
 | 現象 | 確認 |
 |------|------|
-| ログイン 401 | `ADMIN_PASSWORD_HASH` が平文パスワードの SHA-256 と一致しているか |
-| JWT エラー | `JWT_SECRET` が本番に設定されているか |
-| 画像 503 R2 | バインディング名が **`R2`**、バケットが **`diary-media`** か |
-| D1 エラー | `database_id` が正しいか、`schema.sql` 流し込み済みか |
+| ログイン 401 | **`pass`**（Variable）がログイン入力と完全一致しているか |
+| JWT エラー | **`JWT_SECRET`** が Secret として設定されているか |
+| 画像 503 | バインディング **`diaryR2`**、バケット **`diary-media`** |
+| DB 503 / diaryD1 | バインディング名 **`diaryD1`**、D1 が同じアカウントに存在するか |
+| deploy code **10021** | `wrangler.toml` の **`database_id`** を実 UUID に |
+| D1 実行時エラー | UUID 正しいか、`schema.sql` を **`wrangler d1 execute (DB名) --remote`** で流したか |

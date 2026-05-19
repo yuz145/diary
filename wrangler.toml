@@ -9,16 +9,15 @@ compatibility_date = "2024-01-01"
 directory = "static"
 binding = "ASSETS"
 
-# YOUR_D1_DATABASE_ID のままでは wrangler deploy / CI は失敗します。
-# 先行: wrangler d1 create diary-db → ダッシュボード or wrangler d1 list で ID を取得して置換。
+# D1: binding 名はダッシュボードと同じ diaryD1。database_id はプレースホルダーのままだと code 10021
+# database_name はダッシュボードの D1 名（例: diary）に合わせる
 [[d1_databases]]
-binding = "DB"
-database_name = "diary-db"
+binding = "diaryD1"
+database_name = "diary"
 database_id = "YOUR_D1_DATABASE_ID"
 
-# ダッシュボード「バインディング」でも追加可。binding 名はコード上 env.R2 のため "R2" に統一
 [[r2_buckets]]
-binding = "R2"
+binding = "diaryR2"
 bucket_name = "diary-media"
 
 # 機密は wrangler secret put / ダッシュボード「シークレット」のみ（Git に平文を置かない）

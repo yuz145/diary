@@ -90,8 +90,8 @@ rclone sync r2:diary-media /volume1/diary-backup --progress
 ## 8. セットアップ順序
 
 ```
-1. wrangler d1 create diary-db
-2. wrangler d1 execute diary-db --file=schema.sql
+1. wrangler d1 create diary（名前は wrangler.toml の database_name と一致）
+2. wrangler.toml の database_id に UUID を設定 → wrangler d1 execute diary --remote --file=schema.sql
 3. wrangler r2 bucket create diary-media
 4. wrangler deploy
 5. Cloudflare Pages にリポジトリルート（`index.html` がある階層）をデプロイ、または Worker の `npm run deploy` のみで同一 URL に統合
@@ -105,7 +105,7 @@ rclone sync r2:diary-media /volume1/diary-backup --progress
 ## Cursorへの引き継ぎメモ
 
 - `YOUR_SUBDOMAIN` を実際のWorkersサブドメインに置換
-- `ADMIN_PASSWORD_HASH` はSHA-256ハッシュを事前に生成して設定
+- ログイン用はダッシュボード **Variables** の **`pass`**（プレーンテキスト。Worker がそのまま照合）
 - フロントのスタイルは Nexus Design System（ダークモード基調）で仕上げる
 - エディター/ビューワーの切り替えUI、カレンダーUIはCursorで実装
 - 画像はWebPに変換してからR2にアップロードする処理を追加推奨

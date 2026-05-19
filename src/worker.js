@@ -1,6 +1,7 @@
-// JWT_SECRET, ADMIN_PASSWORD_HASH … wrangler / ダッシュボード Variables・Secrets
-// R2: [[r2_buckets]] binding "R2" → env.R2（ダッシュボードのバインディング名も R2 に合わせる）
-// 静的: [assets] → env.ASSETS（HTML / diary-config.json を同一 Worker で配信）
+// JWT_SECRET … ダッシュボード Secrets / wrangler secret put
+// pass … ダッシュボード Variables（プレーンテキスト・ログイン用）
+// D1: binding diaryD1 / R2: binding diaryR2（wrangler.toml とダッシュボードで統一）
+// 静的: [assets] → env.ASSETS
 
 export default {
   async fetch(request, env) {
@@ -24,16 +25,18 @@ export default {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
-    // --- 画像（img タグは Authorization を送れないため JWT なしで公開 GET）
+    const db = env.diaryD1;
+
+    // --- 画像（img は Authorization を送れないため JWT なしで公開 GET）
     if (path.startsWith("/images/") && method === "GET") {
-      if (!env.R2) {
-        return new Response(JSON.stringify({ error: "R2 binding missing. Set R2 in wrangler or dashboard." }), {
-          status: 503,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      if (!env.diaryR2) {
+        return new Response(
+          JSON.stringify({ error: "R2 binding missing. Dashboard: binding name diaryR2 → diary-media." }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
       const key = path.replace(/^\/images\//, "");
-      const obj = await env.R2.get(key);
+      const obj = await env.diaryR2.get(key);
       if (!obj) return new Response("Not found", { status: 404, headers: corsHeaders });
       return new Response(obj.body, {
         headers: {
@@ -44,7 +47,7 @@ export default {
       });
     }
 
-    // --- 同一 Worker でフロントを出す（/ /index.html / diary-config.json 等）
+    // --- 同一 Worker でフロント（/ /index.html / diary-config.json 等）
     if (env.ASSETS && method === "GET") {
       const needsApi = path.startsWith("/diary") || path.startsWith("/auth") || path.startsWith("/images");
       if (!needsApi) {
@@ -53,21 +56,22 @@ export default {
     }
 
     if (path === "/auth/login" && method === "POST") {
+      if (!env.JWT_SECRET) return respond({ error: "JWT_SECRET not configured" }, 503);
       const { password } = await request.json();
-      const valid = await verifyPassword(password, env.ADMIN_PASSWORD_HASH);
-      if (!valid) return respond({ error: "Unauthorized" }, 401);
+      if (!verifyLoginPassword(password, env)) return respond({ error: "Unauthorized" }, 401);
       const token = await generateJWT(env.JWT_SECRET);
       return respond({ token });
     }
 
     if (path === "/diary/inbound-email" && method === "POST") {
       if (!env.EMAIL_SECRET) return respond({ error: "Not configured" }, 503);
+      if (!db) return respond({ error: "D1 binding missing (diaryD1)" }, 503);
       const secret = request.headers.get("X-Email-Secret");
       if (secret !== env.EMAIL_SECRET) return respond({ error: "Forbidden" }, 403);
       const { subject, body, date } = await request.json();
       const id = crypto.randomUUID();
       const entryDate = date || new Date().toISOString().split("T")[0];
-      await env.DB.prepare(
+      await db.prepare(
         "INSERT INTO entries (id, date, title, content, source) VALUES (?, ?, ?, ?, ?)"
       ).bind(id, entryDate, subject, body, "email").run();
       return respond({ ok: true, id });
@@ -78,9 +82,11 @@ export default {
     const valid = await verifyJWT(token, env.JWT_SECRET);
     if (!valid) return respond({ error: "Unauthorized" }, 401);
 
+    if (!db) return respond({ error: "D1 binding missing (diaryD1)" }, 503);
+
     if (path === "/diary" && method === "GET") {
       const limit = url.searchParams.get("limit") || 50;
-      const { results } = await env.DB.prepare(
+      const { results } = await db.prepare(
         "SELECT id, date, title, source, created_at FROM entries ORDER BY date DESC LIMIT ?"
       ).bind(Number(limit)).all();
       return respond({ entries: results });
@@ -88,19 +94,17 @@ export default {
 
     if (path.startsWith("/diary/") && method === "GET") {
       const date = path.split("/diary/")[1];
-      const { results } = await env.DB.prepare(
+      const { results } = await db.prepare(
         "SELECT * FROM entries WHERE date = ? ORDER BY created_at DESC"
       ).bind(date).all();
-      const { results: images } = await env.DB.prepare(
-        "SELECT * FROM images WHERE entry_date = ?"
-      ).bind(date).all();
+      const { results: images } = await db.prepare("SELECT * FROM images WHERE entry_date = ?").bind(date).all();
       return respond({ entries: results, images });
     }
 
     if (path === "/diary" && method === "POST") {
       const { date, title, content, source } = await request.json();
       const id = crypto.randomUUID();
-      await env.DB.prepare(
+      await db.prepare(
         "INSERT INTO entries (id, date, title, content, source) VALUES (?, ?, ?, ?, ?)"
       ).bind(id, date, title || null, content, source || "manual").run();
       return respond({ ok: true, id });
@@ -109,7 +113,7 @@ export default {
     if (path.startsWith("/diary/") && method === "PUT") {
       const id = path.split("/diary/")[1];
       const { title, content } = await request.json();
-      await env.DB.prepare(
+      await db.prepare(
         "UPDATE entries SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
       ).bind(title || null, content, id).run();
       return respond({ ok: true });
@@ -117,13 +121,13 @@ export default {
 
     if (path.startsWith("/diary/") && method === "DELETE") {
       const id = path.split("/diary/")[1];
-      await env.DB.prepare("DELETE FROM entries WHERE id = ?").bind(id).run();
+      await db.prepare("DELETE FROM entries WHERE id = ?").bind(id).run();
       return respond({ ok: true });
     }
 
     if (path === "/diary/upload-image" && method === "POST") {
-      if (!env.R2) {
-        return respond({ error: "R2 not bound. Add R2 bucket binding \"R2\" in wrangler or dashboard." }, 503);
+      if (!env.diaryR2) {
+        return respond({ error: "R2 not bound. Dashboard: diaryR2 → diary-media." }, 503);
       }
       const formData = await request.formData();
       const file = formData.get("file");
@@ -134,11 +138,11 @@ export default {
       const ext = file.name.split(".").pop();
       const r2Key = `${entryDate}/${imageId}.${ext}`;
 
-      await env.R2.put(r2Key, file.stream(), {
+      await env.diaryR2.put(r2Key, file.stream(), {
         httpMetadata: { contentType: file.type },
       });
 
-      await env.DB.prepare(
+      await db.prepare(
         "INSERT INTO images (id, entry_date, r2_key, filename) VALUES (?, ?, ?, ?)"
       ).bind(imageId, entryDate, r2Key, file.name).run();
 
@@ -152,11 +156,22 @@ export default {
     const body = await new Response(message.raw).text();
     const date = new Date().toISOString().split("T")[0];
     const id = crypto.randomUUID();
-    await env.DB.prepare(
-      "INSERT INTO entries (id, date, title, content, source) VALUES (?, ?, ?, ?, ?)"
-    ).bind(id, date, message.headers.get("subject"), body, "email").run();
+    if (!env.diaryD1) return;
+    await env.diaryD1
+      .prepare(
+        "INSERT INTO entries (id, date, title, content, source) VALUES (?, ?, ?, ?, ?)"
+      )
+      .bind(id, date, message.headers.get("subject"), body, "email")
+      .run();
   },
 };
+
+function verifyLoginPassword(password, env) {
+  const p = env.pass;
+  if (p == null) return false;
+  if (typeof p !== "string") return false;
+  return String(password) === p;
+}
 
 async function generateJWT(secret) {
   const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
@@ -174,6 +189,7 @@ async function generateJWT(secret) {
 }
 
 async function verifyJWT(token, secret) {
+  if (!secret) return false;
   try {
     const [header, payload, sig] = token.split(".");
     const data = `${header}.${payload}`;
@@ -192,13 +208,4 @@ async function verifyJWT(token, secret) {
   } catch {
     return false;
   }
-}
-
-async function verifyPassword(password, storedHash) {
-  if (!storedHash || typeof storedHash !== "string") return false;
-  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
-  const hashHex = Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  return hashHex.toLowerCase() === storedHash.trim().toLowerCase();
 }

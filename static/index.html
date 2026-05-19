@@ -77,15 +77,6 @@
       min-height: 4rem;
     }
     #login-error { color: #e57373; }
-    .preview-banner {
-      background: #2a2520;
-      border: 1px solid #4f98a3;
-      color: var(--color-text);
-      padding: 0.75rem 1rem;
-      margin-bottom: 1rem;
-      border-radius: 6px;
-      font-size: 0.9rem;
-    }
     #content .empty-hint { opacity: 0.75; }
     h1 { margin-top: 0; }
     #boot-error {
@@ -125,14 +116,6 @@
       font-size: 0.95rem;
       line-height: 1.45;
     }
-    .btn-secondary {
-      margin-top: 0.75rem;
-      width: 100%;
-      background: #3d3a36;
-      color: var(--color-text);
-    }
-    .btn-secondary:hover { filter: brightness(1.08); }
-    .dev-hint { font-size: 0.8rem; opacity: 0.75; margin-top: 0.75rem; }
   </style>
 </head>
 <body>
@@ -141,11 +124,9 @@
   <form id="login-form" action="#" method="get">
     <h1>My Diary</h1>
     <p id="boot-error" hidden></p>
-    <input type="password" id="password-input" placeholder="パスワード（開発は test）" autocomplete="current-password">
+    <input type="password" id="password-input" placeholder="パスワード（Cloudflare の Variables「pass」と同じ）" autocomplete="current-password">
     <button type="submit" id="login-submit">ログイン</button>
     <p id="login-error" hidden>パスワードが違います</p>
-    <button type="button" id="dev-enter-btn" class="btn-secondary" hidden>API なしで画面を開く（開発）</button>
-    <p id="dev-hint" class="dev-hint" hidden>Worker 未設定のときは上のボタンでそのまま入れます。</p>
   </form>
 </div>
 
@@ -160,7 +141,6 @@
       <button type="button" id="btn-mode-view" class="toolbar-btn is-active">表示</button>
       <button type="button" id="btn-mode-edit" class="toolbar-btn">編集（Markdown）</button>
     </div>
-    <div id="preview-banner" class="preview-banner" hidden></div>
     <div id="panel-view">
       <div id="viewer"></div>
       <div id="image-list"></div>
@@ -178,23 +158,10 @@
 
 <script>
 (function () {
-  const DEFAULT_API = "https://diary-worker.YOUR_SUBDOMAIN.workers.dev";
-
   function normalizeBase(url) {
     return String(url || "").trim().replace(/\/+$/, "");
   }
 
-  function isLocalDevHost() {
-    const h = location.hostname;
-    return (
-      h === "localhost" ||
-      h === "[::1]" ||
-      /^127\.\d+\.\d+\.\d+$/.test(h) ||
-      location.protocol === "file:"
-    );
-  }
-
-  /** 優先度: ?api= ＞ diary-config の apiBaseUrl ＞ sameOrigin / *.workers.dev ＞ DEFAULT */
   async function resolveApiBase() {
     const q = new URLSearchParams(location.search).get("api");
     if (q && q.trim()) return normalizeBase(q);
@@ -206,48 +173,38 @@
         if (cfg && typeof cfg.apiBaseUrl === "string" && cfg.apiBaseUrl.trim()) {
           return normalizeBase(cfg.apiBaseUrl);
         }
-        if (cfg && cfg.sameOrigin === true && !isLocalDevHost()) {
+        if (cfg && cfg.sameOrigin === true) {
           return location.origin;
         }
       }
     } catch (_) {}
 
-    if (!isLocalDevHost() && /\.workers\.dev$/i.test(location.hostname)) {
+    const h = location.hostname;
+    if (h === "localhost" || h === "127.0.0.1" || h === "[::1]") {
       return location.origin;
     }
-
-    /* Cloudflare Pages (*.pages.dev) は Worker と別 URL。未設定時にプレースホルダー URL へ落とさない */
-    if (!isLocalDevHost() && /\.pages\.dev$/i.test(location.hostname)) {
+    if (/\.workers\.dev$/i.test(h)) {
+      return location.origin;
+    }
+    if (/\.pages\.dev$/i.test(h)) {
       return "";
     }
-
-    return DEFAULT_API;
+    return "";
   }
 
   async function boot() {
     const API = await resolveApiBase();
-    const API_UNCONFIGURED = !API || API.includes("YOUR_SUBDOMAIN");
+    const API_UNCONFIGURED = !API;
     const isPagesHost = /\.pages\.dev$/i.test(location.hostname);
-    const PREVIEW_LOCAL = new URLSearchParams(location.search).get("preview") === "1";
     let TOKEN = null;
     let selectedDate = null;
 
     const bootErr = document.getElementById("boot-error");
     if (API_UNCONFIGURED) {
       bootErr.textContent = isPagesHost
-        ? "このサイトは Pages（*.pages.dev）です。API は別の Worker URL です。リポジトリの `diary-config.json` で \"apiBaseUrl\" に `https://（あなたのWorker）.workers.dev` を書き、保存して再デプロイしてください。"
-        : "開発モード: `diary-config.json` の apiBaseUrl がまだプレースホルダーです。パスワード test で表示のみ入れます。";
+        ? "このサイトは Pages（*.pages.dev）です。API は別 URL の Worker です。`diary-config.json` の \"apiBaseUrl\" に `https://（Worker名）.workers.dev` を書き、push して再デプロイしてください。"
+        : "API のベース URL が決まりません。`diary-config.json` の apiBaseUrl を設定するか、`?api=` で Worker の URL を指定して開いてください。";
       bootErr.hidden = false;
-    }
-
-    function setPreviewBanner(text) {
-      const el = document.getElementById("preview-banner");
-      el.textContent = text || "";
-      el.hidden = !text;
-    }
-
-    function isPreviewToken() {
-      return TOKEN === "preview-local";
     }
 
     function authHeaders() {
@@ -271,11 +228,9 @@
     function setViewMode(reload) {
       document.getElementById("panel-view").hidden = false;
       document.getElementById("editor").hidden = true;
-      const bv = document.getElementById("btn-mode-view");
-      const be = document.getElementById("btn-mode-edit");
-      bv.classList.add("is-active");
-      be.classList.remove("is-active");
-      if (reload && selectedDate && !isPreviewToken()) {
+      document.getElementById("btn-mode-view").classList.add("is-active");
+      document.getElementById("btn-mode-edit").classList.remove("is-active");
+      if (reload && selectedDate) {
         loadEntry(selectedDate);
       }
     }
@@ -292,13 +247,6 @@
       const ta = document.getElementById("editor-input");
       const previewEl = document.getElementById("editor-preview");
       const d = selectedDate || new Date().toISOString().split("T")[0];
-      if (isPreviewToken()) {
-        ta.placeholder = "（表示のみモードは保存できません）";
-        if (!ta.value) ta.value = "";
-        const md = typeof marked !== "undefined" ? marked.parse : (t) => t.replace(/\n/g, "<br>");
-        previewEl.innerHTML = md(ta.value);
-        return;
-      }
       const res = await fetch(`${API}/diary/${encodeURIComponent(d)}`, { headers: authHeaders() });
       if (!res.ok) {
         ta.value = "";
@@ -308,19 +256,12 @@
       const { entries } = await res.json();
       const text = (entries || []).map((e) => e.content).join("\n\n---\n\n");
       ta.value = text;
-      const md = typeof marked !== "undefined" ? marked.parse : (t) => t.replace(/\n/g, "<br>");
+      const md =
+        typeof marked !== "undefined" ? marked.parse : (t) => t.replace(/\n/g, "<br>");
       previewEl.innerHTML = md(text);
     }
 
     async function loadEntryList() {
-      if (isPreviewToken()) {
-        document.getElementById("entry-list").innerHTML = "";
-        document.getElementById("viewer").innerHTML =
-          "<p class=\"empty-hint\">ここにエントリの Markdown が表示されます。API を接続すると左に一覧が出ます。</p>";
-        document.getElementById("image-list").innerHTML = "";
-        return;
-      }
-
       const res = await fetch(`${API}/diary`, { headers: authHeaders() });
       if (!res.ok) {
         document.getElementById("entry-list").innerHTML =
@@ -342,10 +283,15 @@
 
     async function loadEntry(date) {
       selectedDate = date;
-      if (isPreviewToken()) return;
       const res = await fetch(`${API}/diary/${encodeURIComponent(date)}`, { headers: authHeaders() });
+      if (!res.ok) {
+        document.getElementById("viewer").innerHTML =
+          "<p class=\"empty-hint\">読み込みに失敗しました。</p>";
+        document.getElementById("image-list").innerHTML = "";
+        return;
+      }
       const { entries, images } = await res.json();
-      const content = entries.map((e) => e.content).join("\n\n---\n\n");
+      const content = (entries || []).map((e) => e.content).join("\n\n---\n\n");
       const md = typeof marked !== "undefined" ? marked.parse : (t) => t;
       document.getElementById("viewer").innerHTML = md(content || "_（本文なし）_");
 
@@ -358,37 +304,18 @@
       document.getElementById("image-list").innerHTML = imgHtml;
     }
 
-    async function enterOfflineTestMode(message) {
-      TOKEN = "preview-local";
-      setPreviewBanner(
-        message ||
-          "パスワード test ・表示のみ。本番 Worker の URL を `diary-config.json` か `?api=` に書いてください。"
-      );
-      await showMain();
-    }
-
     async function handleLogin() {
       document.getElementById("login-error").hidden = true;
-      const raw = document.getElementById("password-input").value;
-      const password = raw.trim();
-      const wantOffline =
-        password.toLowerCase() === "test" && API_UNCONFIGURED;
+      const password = document.getElementById("password-input").value;
 
-      if (!API && !wantOffline) {
+      if (!API) {
         document.getElementById("login-error").textContent =
-          "先に `diary-config.json` の apiBaseUrl に Worker の https://....workers.dev を設定してください。";
+          "先に `diary-config.json` の apiBaseUrl を設定するか、`?api=https://….workers.dev` で開いてください。";
         document.getElementById("login-error").hidden = false;
         return;
       }
 
       try {
-        if (wantOffline) {
-          await enterOfflineTestMode(
-            "API URL が未設定のため表示のみでログインしました。リポジトリ直下の `diary-config.json` の `apiBaseUrl` を本番に直すか `?api=` を付与してください。"
-          );
-          return;
-        }
-
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 12000);
         const res = await fetch(`${API}/auth/login`, {
@@ -399,7 +326,6 @@
         });
         clearTimeout(timer);
         if (res.ok) {
-          setPreviewBanner("");
           const { token } = await res.json();
           TOKEN = token;
           await showMain();
@@ -408,43 +334,10 @@
         document.getElementById("login-error").hidden = false;
       } catch (err) {
         console.error(err);
-        if (password.toLowerCase() === "test") {
-          await enterOfflineTestMode("API に接続できません。オフライン表示に切り替えました。");
-          return;
-        }
+        document.getElementById("login-error").textContent =
+          "API に接続できません。URL とネットワークを確認してください。";
         document.getElementById("login-error").hidden = false;
       }
-    }
-
-    if (PREVIEW_LOCAL) {
-      TOKEN = "preview-local";
-      const vLogin = document.getElementById("view-login");
-      const vMain = document.getElementById("view-main");
-      vLogin.hidden = true;
-      vMain.hidden = false;
-      vLogin.style.display = "none";
-      vMain.style.display = "flex";
-      setPreviewBanner(
-        "プレビュー（?preview=1）。API は呼びません。`diary-config.json` で URL を指定できます。"
-      );
-      await showMain();
-    }
-
-    const devBtn = document.getElementById("dev-enter-btn");
-    const devHint = document.getElementById("dev-hint");
-    if (API_UNCONFIGURED) {
-      devBtn.hidden = false;
-      devHint.hidden = false;
-      devBtn.addEventListener("click", async () => {
-        try {
-          await enterOfflineTestMode(
-            "開発用: Worker に接続せず表示のみモードで入りました。"
-          );
-        } catch (err) {
-          console.error(err);
-          alert("画面の切り替えに失敗しました: " + (err && err.message ? err.message : String(err)));
-        }
-      });
     }
 
     document.getElementById("login-form").addEventListener("submit", async (e) => {
@@ -465,12 +358,6 @@
     });
 
     document.getElementById("save-btn").addEventListener("click", async () => {
-      if (isPreviewToken()) {
-        alert(
-          "表示のみモードです。Cloudflare Pages 利用時は `diary-config.json` の apiBaseUrl に Worker のフル URL（https://....workers.dev）を書き、push して再デプロイ後、本番パスワードでログインしてください。"
-        );
-        return;
-      }
       const date = selectedDate || new Date().toISOString().split("T")[0];
       const content = document.getElementById("editor-input").value;
       await fetch(`${API}/diary`, {
@@ -500,7 +387,8 @@
     });
 
     document.getElementById("editor-input").addEventListener("input", (e) => {
-      const md = typeof marked !== "undefined" ? marked.parse : (t) => t.replace(/\n/g, "<br>");
+      const md =
+        typeof marked !== "undefined" ? marked.parse : (t) => t.replace(/\n/g, "<br>");
       document.getElementById("editor-preview").innerHTML = md(e.target.value);
     });
   }
